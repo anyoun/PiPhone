@@ -23,7 +23,7 @@ class keypad():
         #hook the columns (1,2,3) to these GPIO pins
         self.COLUMN      = [4,17,22]
 
-        self.__setInterruptMode()
+        self.__setInterruptMode(True)
 
     def __colInt(self, channel):
         time.sleep(0.05) #give it a moment to settle
@@ -31,8 +31,8 @@ class keypad():
             return
 
         #remove interrupts temporarily
-        for c in range(len(self.COLUMN)):
-            GPIO.remove_event_detect(self.COLUMN[c])
+        #for c in range(len(self.COLUMN)):
+        #    GPIO.remove_event_detect(self.COLUMN[c])
 
         #get column number
         colVal = -1
@@ -92,17 +92,18 @@ class keypad():
         self.__colInt(channel) #handle the actual interrupt
         self._inInterrupt = False
 
-    def __setInterruptMode(self):
+    def __setInterruptMode(self, first_time=False):
         #set the first row as output low
         #only first one needed as it will ground to all columns
         for r in range(len(self.ROW)):
             GPIO.setup(self.ROW[r], GPIO.OUT, initial=GPIO.LOW)
 
         #set columns as inputs and attach interrupt handlers on rising edge
+        #only one-time
         for c in range(len(self.COLUMN)):
             GPIO.setup(self.COLUMN[c], GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(self.COLUMN[c], GPIO.FALLING, bouncetime=250, callback=self.__changeWrapper)
-
+            if first_time:
+                GPIO.add_event_detect(self.COLUMN[c], GPIO.FALLING, bouncetime=250, callback=self.__changeWrapper)
 
     def cleanup(self):
         GPIO.cleanup()
