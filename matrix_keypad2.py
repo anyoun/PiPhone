@@ -110,8 +110,19 @@ class keypad():
         print "Cleanup done!"
 
 import time
+
+# import pyglet
+# pyglet.options['audio'] = ('pluse', 'openal')
+from pydub import AudioSegment, playback
+
 if __name__ == '__main__':
+    # sound0 = pyglet.media.load('sounds/Dtmf-0.wav', streaming=False)
+    # sound0 = tkSnack.Sound()
+    # sound0.read('sounds/Dtmf-0.wav')
+    sound0 = AudioSegment.from_wav("/home/pi/sounds/Dtmf-0.wav")
+
     def keypadCallback(value):
+        playback.play(sound0)
         print "Keypad: " + value
 
     key = keypad(keypadCallback)
