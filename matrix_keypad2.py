@@ -1,7 +1,55 @@
 #!/usr/bin/python
 
 import RPi.GPIO as GPIO
-import time
+import pyaudio
+import time, math, numpy
+
+DTMF = {
+    "1": [1209, 697],
+    "2": [1336, 697],
+    "3": [1477, 697],
+
+    "4": [1209, 770],
+    "5": [1336, 770],
+    "6": [1477, 770],
+
+    "7": [1209, 852],
+    "8": [1336, 852],
+    "9": [1477, 852],
+
+    "*": [1209, 941],
+    "0": [1336, 941],
+    "#": [1477, 941],
+}
+
+class ToneGenerator(object):
+    def __init__(self, samplerate=44100):
+        self.samplerate = samplerate
+        self.amplitude = .5
+        self.buffer_offset = 0
+        self.streamOpen = True
+        self.frequency = 0
+
+    def sinewave(self, frame_count):
+        if self.frequency == 0:
+            out = numpy.zeros(frame_count)
+        else:
+            xs = numpy.arange(self.buffer_offset, self.buffer_offset + frame_count)
+            omega = float(self.frequency) * (math.pi * 2) / self.samplerate
+            out = self.amplitude * numpy.sin(xs * omega)
+        self.buffer_offset += frame_count
+        return out
+
+    def get_next_buffer(self, frame_count):
+        data = self.sinewave(frame_count).astype(numpy.float32)
+        return data.tostring()
+
+    # def callback(self, in_data, frame_count, time_info, status):
+    #     if self.buffer_offset < self.x_max:
+    #         data = self.sinewave().astype(numpy.float32)
+    #         return (data.tostring(), pyaudio.paContinue)
+    #     else:
+    #         return (None, pyaudio.paComplete)
 
 class keypad():
     def __init__(self, callback):
@@ -62,7 +110,7 @@ class keypad():
             if rowVal >= 0 and rowVal < len(self.ROW):
                 #send key info right away
                 self._callback(self.KEYPAD[rowVal][colVal])
-                #This avoids nasty boucning errors when the key is released
+                #This avoids nasty bouncing errors when the key is released
                 #By waiting for the rising edge before re-enabling interrupts it
                 #avoids interrupts fired due to bouncing on key release and
                 #any repeated interrupts that would otherwise fire.
@@ -86,7 +134,7 @@ class keypad():
         #if there is already another interrupt going on (multiple key press or something)
         #return right away to avoid collisions
         if self._inInterrupt:
-            return;
+            return
 
         self._inInterrupt = True
         self.__colInt(channel) #handle the actual interrupt
@@ -109,21 +157,23 @@ class keypad():
         GPIO.cleanup()
         print "Cleanup done!"
 
-import time
-
-# import pyglet
-# pyglet.options['audio'] = ('pluse', 'openal')
-from pydub import AudioSegment, playback
 
 if __name__ == '__main__':
-    # sound0 = pyglet.media.load('sounds/Dtmf-0.wav', streaming=False)
-    # sound0 = tkSnack.Sound()
-    # sound0.read('sounds/Dtmf-0.wav')
-    sound0 = AudioSegment.from_wav("/home/pi/sounds/Dtmf-0.wav")
+    p = pyaudio.PyAudio()
+    tone = ToneGenerator(samplerate= 44100/4)
+
+    def callback(in_data, frame_count, time_info, status):
+        #data = [] # length = frame_count * channels * bytes-per-channel
+        return (tone.get_next_buffer(frame_count), pyaudio.paContinue)
+
+    stream = p.open(format=pyaudio.paFloat32,
+                    channels=1, rate=tone.samplerate,
+                    output=True,
+                    stream_callback=callback)
 
     def keypadCallback(value):
-        playback.play(sound0)
         print "Keypad: " + value
+        tone.frequency = DTMF[value][0]
 
     key = keypad(keypadCallback)
 
