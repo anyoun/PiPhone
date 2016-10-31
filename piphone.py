@@ -28,21 +28,19 @@ class ToneGenerator(object):
         self.amplitude = .5
         self.buffer_offset = 0
         self.streamOpen = True
-        self.frequency = 0
+        self.frequencies = ()
 
     def sinewave(self, frame_count):
-        if self.frequency == 0:
-            out = numpy.zeros(frame_count)
-        else:
+        out = numpy.zeros(frame_count)
+        for f in self.frequencies:
             xs = numpy.arange(self.buffer_offset, self.buffer_offset + frame_count)
-            omega = float(self.frequency) * (math.pi * 2) / self.samplerate
-            out = self.amplitude * numpy.sin(xs * omega)
+            omega = float(f) * (math.pi * 2) / self.samplerate
+            out += self.amplitude * numpy.sin(xs * omega)
         self.buffer_offset += frame_count
         return out
 
     def get_next_buffer(self, frame_count):
-        data = self.sinewave(frame_count).astype(numpy.float32)
-        return data.tostring()
+        return self.sinewave(frame_count).astype(numpy.float32).tostring()
 
     # def callback(self, in_data, frame_count, time_info, status):
     #     if self.buffer_offset < self.x_max:
@@ -51,12 +49,13 @@ class ToneGenerator(object):
     #     else:
     #         return (None, pyaudio.paComplete)
 
-class keypad():
-    def __init__(self, callback):
+class Keypad(object):
+    def __init__(self, button_down_callback, button_up_callback):
         GPIO.setmode(GPIO.BCM)
         self._count = 0
         self._inInterrupt = False
-        self._callback = callback
+        self._button_down_callback = button_down_callback
+        self._button_up_callback = button_up_callback
 
         # CONSTANTS
         self.KEYPAD = [
@@ -77,10 +76,6 @@ class keypad():
         time.sleep(0.05) #give it a moment to settle
         if GPIO.input(channel) > 0:
             return
-
-        #remove interrupts temporarily
-        #for c in range(len(self.COLUMN)):
-        #    GPIO.remove_event_detect(self.COLUMN[c])
 
         #get column number
         colVal = -1
@@ -109,7 +104,7 @@ class keypad():
             #continue if row is valid (possible that it might not be if the key was very quickly released)
             if rowVal >= 0 and rowVal < len(self.ROW):
                 #send key info right away
-                self._callback(self.KEYPAD[rowVal][colVal])
+                self._button_down_callback(self.KEYPAD[rowVal][colVal])
                 #This avoids nasty bouncing errors when the key is released
                 #By waiting for the rising edge before re-enabling interrupts it
                 #avoids interrupts fired due to bouncing on key release and
@@ -120,6 +115,7 @@ class keypad():
                 except RuntimeError:
                     pass
 
+                self._button_up_callback(self.KEYPAD[rowVal][colVal])
                 return
 
             else:
@@ -171,11 +167,15 @@ if __name__ == '__main__':
                     output=True,
                     stream_callback=callback)
 
-    def keypadCallback(value):
-        print "Keypad: " + value
-        tone.frequency = DTMF[value][0]
+    def keypad_button_down(value):
+        print "Keypad down: " + value
+        tone.frequencies = DTMF[value]
 
-    key = keypad(keypadCallback)
+    def keypad_button_up(value):
+        print "Keypad up: " + value
+        tone.frequencies = ()
+
+    key = Keypad(keypad_button_down, keypad_button_up)
 
     try:
         while True:
