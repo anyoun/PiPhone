@@ -1,8 +1,7 @@
 #!/usr/bin/python
-
 import RPi.GPIO as GPIO
 import pyaudio
-import time, math, numpy
+import time, math, numpy, logging
 
 DTMF = {
     "1": [1209, 697],
@@ -21,6 +20,10 @@ DTMF = {
     "0": [1336, 941],
     "#": [1477, 941],
 }
+
+logging.basicConfig(filename="/var/log/piphone/piphone.log", level="DEBUG",
+                    format="%(asctime)-15s %(name)-8s %(module)-15s %(funcName)-15s %(message)s")
+log = logging.getLogger("piphone")
 
 class ToneGenerator(object):
     def __init__(self, samplerate=44100):
@@ -119,9 +122,9 @@ class Keypad(object):
                 return
 
             else:
-                print "Invalid Row!"
+                log.error("Invalid Row!")
         else:
-            print "Invalid Col!"
+            log.error("Invalid Col!")
 
         #re-enable interrupts
         self.__setInterruptMode()
@@ -151,12 +154,12 @@ class Keypad(object):
 
     def cleanup(self):
         GPIO.cleanup()
-        print "Cleanup done!"
+        log.info("Cleanup done!")
 
 
 if __name__ == '__main__':
     p = pyaudio.PyAudio()
-    tone = ToneGenerator(samplerate= 44100/4)
+    tone = ToneGenerator(samplerate=44100/8)
 
     def callback(in_data, frame_count, time_info, status):
         #data = [] # length = frame_count * channels * bytes-per-channel
@@ -168,11 +171,11 @@ if __name__ == '__main__':
                     stream_callback=callback)
 
     def keypad_button_down(value):
-        print "Keypad down: " + value
+        log.debug("Keypad down: " + value)
         tone.frequencies = DTMF[value]
 
     def keypad_button_up(value):
-        print "Keypad up: " + value
+        log.debug("Keypad up: " + value)
         tone.frequencies = ()
 
     key = Keypad(keypad_button_down, keypad_button_up)
